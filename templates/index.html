@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>申请评分卡 — 信用风险评估</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    min-height: 100vh; padding: 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  .header {
+    background: #fff; border-radius: 12px; padding: 30px; margin-bottom: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08); text-align: center;
+  }
+  .header h1 { font-size: 28px; color: #1a1a2e; margin-bottom: 8px; }
+  .header p { color: #888; font-size: 14px; }
+  .card {
+    background: #fff; border-radius: 12px; padding: 28px; margin-bottom: 20px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .card-title {
+    font-size: 17px; font-weight: 700; color: #1a1a2e;
+    margin-bottom: 20px; padding-bottom: 12px;
+    border-bottom: 2px solid #4361ee;
+  }
+  .form-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .form-group { display: flex; flex-direction: column; }
+  .form-group label {
+    font-size: 13px; font-weight: 600; color: #555; margin-bottom: 5px;
+  }
+  .form-group label .hint { color: #aaa; font-weight: 400; font-size: 11px; }
+  .form-group input, .form-group select {
+    padding: 10px 12px; border: 1px solid #ddd; border-radius: 8px;
+    font-size: 14px; transition: border 0.2s; outline: none;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: #4361ee; }
+  .btn-wrap { text-align: center; margin: 30px 0; }
+  .btn {
+    padding: 14px 60px; font-size: 16px; font-weight: 600;
+    border: none; border-radius: 10px; cursor: pointer; transition: all 0.3s;
+    background: linear-gradient(135deg, #4361ee, #7209b7);
+    color: #fff; letter-spacing: 1px;
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(67,97,238,0.4); }
+  .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; box-shadow: none; }
+  .result { display: none; }
+  .result.show { display: block; }
+  .result-card {
+    text-align: center; padding: 30px; border-radius: 12px;
+    margin-bottom: 20px; color: #fff;
+  }
+  .result-card.low { background: linear-gradient(135deg, #52c41a, #73d13d); }
+  .result-card.medium { background: linear-gradient(135deg, #faad14, #ffc53d); }
+  .result-card.high { background: linear-gradient(135deg, #ff4d4f, #ff7875); }
+  .risk-label { font-size: 36px; font-weight: 800; margin-bottom: 8px; }
+  .risk-desc { font-size: 14px; opacity: 0.9; }
+  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 20px; }
+  .metric {
+    background: #fff; border-radius: 12px; padding: 20px; text-align: center;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .metric-label { font-size: 13px; color: #888; margin-bottom: 8px; }
+  .metric-value { font-size: 28px; font-weight: 700; color: #1a1a2e; }
+  .metric-unit { font-size: 13px; color: #aaa; }
+  .score-bar-wrap {
+    background: #f0f0f0; border-radius: 8px; height: 16px;
+    margin-top: 10px; overflow: hidden;
+  }
+  .score-bar {
+    height: 100%; border-radius: 8px; transition: width 0.8s ease;
+    background: linear-gradient(90deg, #ff4d4f, #faad14 25%, #52c41a 75%, #1890ff);
+  }
+  .score-labels { display: flex; justify-content: space-between; font-size: 12px; color: #aaa; margin-top: 4px; }
+  .error-msg {
+    background: #fff2f0; border: 1px solid #ffccc7; border-radius: 8px;
+    padding: 12px 16px; color: #ff4d4f; font-size: 14px; display: none;
+  }
+  .spinner {
+    display: inline-block; width: 20px; height: 20px; border: 3px solid rgba(255,255,255,.3);
+    border-radius: 50%; border-top-color: #fff; animation: spin 0.8s linear infinite;
+    vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (max-width: 600px) {
+    .metric-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <h1>申请评分卡 — 信用风险评估</h1>
+    <p>填写贷款申请信息，系统将预测违约概率并给出信用评分（300-850）</p>
+  </div>
+
+  <!-- 贷款信息 -->
+  <div class="card">
+    <div class="card-title">贷款信息</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>贷款金额 ($) <span class="hint">loanAmnt</span></label>
+        <input type="number" id="loanAmnt" placeholder="例: 15000" value="15000" step="100">
+      </div>
+      <div class="form-group">
+        <label>贷款期限 (年) <span class="hint">term</span></label>
+        <select id="term">
+          <option value="3">3 年</option>
+          <option value="5" selected>5 年</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>利率 (%) <span class="hint">interestRate</span></label>
+        <input type="number" id="interestRate" placeholder="例: 12.5" value="12.5" step="0.01" min="0" max="40">
+      </div>
+      <div class="form-group">
+        <label>月供 ($) <span class="hint">installment</span></label>
+        <input type="number" id="installment" placeholder="例: 500" value="500" step="1">
+      </div>
+      <div class="form-group">
+        <label>贷款等级 <span class="hint">grade</span></label>
+        <select id="grade">
+          <option value="A">A — 最优</option>
+          <option value="B">B</option>
+          <option value="C" selected>C</option>
+          <option value="D">D</option>
+          <option value="E">E</option>
+          <option value="F">F</option>
+          <option value="G">G — 最差</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>贷款子等级 <span class="hint">subGrade</span></label>
+        <select id="subGrade">
+          <option value="C1" selected>C1</option>
+          <option value="A1">A1</option><option value="A2">A2</option><option value="A3">A3</option>
+          <option value="A4">A4</option><option value="A5">A5</option>
+          <option value="B1">B1</option><option value="B2">B2</option><option value="B3">B3</option>
+          <option value="B4">B4</option><option value="B5">B5</option>
+          <option value="C2">C2</option><option value="C3">C3</option><option value="C4">C4</option>
+          <option value="C5">C5</option>
+          <option value="D1">D1</option><option value="D2">D2</option><option value="D3">D3</option>
+          <option value="D4">D4</option><option value="D5">D5</option>
+          <option value="E1">E1</option><option value="E2">E2</option><option value="E3">E3</option>
+          <option value="E4">E4</option><option value="E5">E5</option>
+          <option value="F1">F1</option><option value="F2">F2</option><option value="F3">F3</option>
+          <option value="F4">F4</option><option value="F5">F5</option>
+          <option value="G1">G1</option><option value="G2">G2</option><option value="G3">G3</option>
+          <option value="G4">G4</option><option value="G5">G5</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>贷款用途 <span class="hint">purpose</span></label>
+        <select id="purpose">
+          <option value="0">债务重组</option>
+          <option value="1" selected>其他</option>
+        </select>
+      </div>
+    </div>
+  </div>
+
+  <!-- 个人信息 -->
+  <div class="card">
+    <div class="card-title">个人 &amp; 收入信息</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>年收入 ($) <span class="hint">annualIncome</span></label>
+        <input type="number" id="annualIncome" placeholder="例: 60000" value="60000" step="100">
+      </div>
+      <div class="form-group">
+        <label>工作年限 <span class="hint">employmentLength</span></label>
+        <select id="employmentLength">
+          <option value="< 1 year">&lt; 1 年</option>
+          <option value="1 year">1 年</option>
+          <option value="2 years">2 年</option>
+          <option value="3 years">3 年</option>
+          <option value="4 years">4 年</option>
+          <option value="5 years" selected>5 年</option>
+          <option value="6 years">6 年</option>
+          <option value="7 years">7 年</option>
+          <option value="8 years">8 年</option>
+          <option value="9 years">9 年</option>
+          <option value="10+ years">10+ 年</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>住房状况 <span class="hint">homeOwnership</span></label>
+        <select id="homeOwnership">
+          <option value="0">租房</option>
+          <option value="1" selected>自有住房</option>
+          <option value="2">按揭</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>收入验证状态 <span class="hint">verificationStatus</span></label>
+        <select id="verificationStatus">
+          <option value="0">未验证</option>
+          <option value="1" selected>已验证</option>
+          <option value="2">验证中</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>债务收入比 DTI <span class="hint">dti</span></label>
+        <input type="number" id="dti" placeholder="例: 18.5" value="18.5" step="0.01" min="0" max="100">
+      </div>
+      <div class="form-group">
+        <label>地区代码 <span class="hint">regionCode</span></label>
+        <input type="number" id="regionCode" value="8" step="1" min="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- 信用历史 -->
+  <div class="card">
+    <div class="card-title">信用历史</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>FICO 分下限 <span class="hint">ficoRangeLow</span></label>
+        <input type="number" id="ficoRangeLow" placeholder="例: 680" value="680" step="1" min="300" max="850">
+      </div>
+      <div class="form-group">
+        <label>FICO 分上限 <span class="hint">ficoRangeHigh</span></label>
+        <input type="number" id="ficoRangeHigh" placeholder="例: 720" value="720" step="1" min="300" max="850">
+      </div>
+      <div class="form-group">
+        <label>近2年逾期次数 <span class="hint">delinquency_2years</span></label>
+        <input type="number" id="delinquency_2years" placeholder="例: 0" value="0" step="1" min="0" max="50">
+      </div>
+      <div class="form-group">
+        <label>公共记录数 <span class="hint">pubRec</span></label>
+        <input type="number" id="pubRec" placeholder="例: 0" value="0" step="1" min="0">
+      </div>
+      <div class="form-group">
+        <label>破产记录数 <span class="hint">pubRecBankruptcies</span></label>
+        <input type="number" id="pubRecBankruptcies" placeholder="例: 0" value="0" step="1" min="0">
+      </div>
+      <div class="form-group">
+        <label>最早信用记录 <span class="hint">earliesCreditLine</span></label>
+        <input type="text" id="earliesCreditLine" placeholder="例: Jan-2010" value="Jan-2010">
+      </div>
+    </div>
+  </div>
+
+  <!-- 账户信息 -->
+  <div class="card">
+    <div class="card-title">账户信息</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>活跃账户数 <span class="hint">openAcc</span></label>
+        <input type="number" id="openAcc" placeholder="例: 8" value="8" step="1" min="0">
+      </div>
+      <div class="form-group">
+        <label>总账户数 <span class="hint">totalAcc</span></label>
+        <input type="number" id="totalAcc" placeholder="例: 25" value="25" step="1" min="0">
+      </div>
+      <div class="form-group">
+        <label>循环信用余额 ($) <span class="hint">revolBal</span></label>
+        <input type="number" id="revolBal" placeholder="例: 8000" value="8000" step="100">
+      </div>
+      <div class="form-group">
+        <label>循环利用率 (%) <span class="hint">revolUtil</span></label>
+        <input type="number" id="revolUtil" placeholder="例: 45.0" value="45.0" step="0.1" min="0" max="100">
+      </div>
+    </div>
+  </div>
+
+  <!-- 提交按钮 -->
+  <div class="btn-wrap">
+    <button class="btn" id="submitBtn" onclick="submitForm()">
+      开始评估信用风险
+    </button>
+  </div>
+
+  <!-- 错误消息 -->
+  <div class="error-msg" id="errorMsg"></div>
+
+  <!-- 结果区域 -->
+  <div class="result" id="resultArea">
+    <div class="result-card" id="resultCard">
+      <div class="risk-label" id="riskLabel"></div>
+      <div class="risk-desc" id="riskDesc"></div>
+    </div>
+
+    <div class="metric-grid">
+      <div class="metric">
+        <div class="metric-label">违约概率</div>
+        <div class="metric-value" id="probValue">--</div>
+        <div class="metric-unit">模型预测</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">信用评分</div>
+        <div class="metric-value" id="scoreValue">--</div>
+        <div class="metric-unit">范围 300-850</div>
+      </div>
+      <div class="metric">
+        <div class="metric-label">模型融合 AUC</div>
+        <div class="metric-value">0.741+</div>
+        <div class="metric-unit">4模型融合</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">评分卡位置</div>
+      <div style="font-size:14px; color:#555; margin-bottom:8px;">
+        当前评分: <strong id="scoreBarLabel">--</strong>
+      </div>
+      <div class="score-bar-wrap">
+        <div class="score-bar" id="scoreBar" style="width: 50%;"></div>
+      </div>
+      <div class="score-labels">
+        <span>300 <br>极高风险</span>
+        <span>450<br>高风险</span>
+        <span>550<br>中风险</span>
+        <span>650<br>低风险</span>
+        <span>850<br>极低风险</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+async function submitForm() {
+  const btn = document.getElementById('submitBtn');
+  const errorDiv = document.getElementById('errorMsg');
+  const resultArea = document.getElementById('resultArea');
+
+  // 隐藏之前的错误和结果
+  errorDiv.style.display = 'none';
+  resultArea.classList.remove('show');
+
+  // 收集表单数据
+  const payload = {
+    loanAmnt: parseFloat(document.getElementById('loanAmnt').value) || 0,
+    term: parseInt(document.getElementById('term').value) || 3,
+    interestRate: parseFloat(document.getElementById('interestRate').value) || 0,
+    installment: parseFloat(document.getElementById('installment').value) || 0,
+    grade: document.getElementById('grade').value,
+    subGrade: document.getElementById('subGrade').value,
+    purpose: parseInt(document.getElementById('purpose').value) || 0,
+    annualIncome: parseFloat(document.getElementById('annualIncome').value) || 0,
+    employmentLength: document.getElementById('employmentLength').value,
+    homeOwnership: parseInt(document.getElementById('homeOwnership').value) || 0,
+    verificationStatus: parseInt(document.getElementById('verificationStatus').value) || 0,
+    dti: parseFloat(document.getElementById('dti').value) || 0,
+    regionCode: parseInt(document.getElementById('regionCode').value) || 0,
+    ficoRangeLow: parseFloat(document.getElementById('ficoRangeLow').value) || 0,
+    ficoRangeHigh: parseFloat(document.getElementById('ficoRangeHigh').value) || 0,
+    delinquency_2years: parseFloat(document.getElementById('delinquency_2years').value) || 0,
+    pubRec: parseFloat(document.getElementById('pubRec').value) || 0,
+    pubRecBankruptcies: parseFloat(document.getElementById('pubRecBankruptcies').value) || 0,
+    earliesCreditLine: document.getElementById('earliesCreditLine').value || 'Jan-2010',
+    openAcc: parseFloat(document.getElementById('openAcc').value) || 0,
+    totalAcc: parseFloat(document.getElementById('totalAcc').value) || 0,
+    revolBal: parseFloat(document.getElementById('revolBal').value) || 0,
+    revolUtil: parseFloat(document.getElementById('revolUtil').value) || 0
+  };
+
+  // 校验必要字段
+  if (payload.loanAmnt <= 0 || payload.annualIncome <= 0) {
+    showError('请填写贷款金额和年收入（必须大于0）');
+    return;
+  }
+  if (payload.ficoRangeLow < 300 || payload.ficoRangeHigh > 850) {
+    showError('FICO分数范围应在300-850之间');
+    return;
+  }
+
+  // 显示加载状态
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>正在评估中...';
+
+  try {
+    const resp = await fetch('/api/predict', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await resp.json();
+
+    if (!result.success) {
+      showError(result.error || '预测失败，请重试');
+      return;
+    }
+
+    // 显示结果
+    displayResult(result);
+
+  } catch (err) {
+    showError('网络请求失败: ' + err.message);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '开始评估信用风险';
+  }
+}
+
+function displayResult(r) {
+  const resultArea = document.getElementById('resultArea');
+  resultArea.classList.add('show');
+
+  // 风险等级卡片
+  const card = document.getElementById('resultCard');
+  card.className = 'result-card ' + r.risk_level;
+  document.getElementById('riskLabel').textContent = r.risk_label;
+  document.getElementById('riskDesc').textContent =
+    '违约概率 ' + r.probability_pct + ' | 信用评分 ' + r.score + ' 分';
+
+  // 指标
+  document.getElementById('probValue').textContent = r.probability_pct;
+  document.getElementById('scoreValue').textContent = r.score;
+
+  // 评分条 (300-850 -> 0-100%)
+  const pct = ((r.score - 300) / (850 - 300)) * 100;
+  document.getElementById('scoreBar').style.width = Math.min(100, Math.max(0, pct)) + '%';
+  document.getElementById('scoreBarLabel').textContent = r.score + ' 分';
+
+  // 滚动到结果
+  resultArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function showError(msg) {
+  const errDiv = document.getElementById('errorMsg');
+  errDiv.textContent = msg;
+  errDiv.style.display = 'block';
+  errDiv.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+// 实时联动: interestRate 改变 -> 更新 installment
+document.getElementById('interestRate').addEventListener('input', function() {
+  const loanAmnt = parseFloat(document.getElementById('loanAmnt').value) || 0;
+  const rate = parseFloat(this.value) || 0;
+  const term = parseInt(document.getElementById('term').value) || 3;
+  if (loanAmnt > 0 && rate > 0 && term > 0) {
+    const monthlyRate = rate / 100 / 12;
+    const n = term * 12;
+    const installment = (loanAmnt * monthlyRate * Math.pow(1 + monthlyRate, n)) /
+                        (Math.pow(1 + monthlyRate, n) - 1);
+    document.getElementById('installment').value = Math.round(installment);
+  }
+});
+
+// FICO上下限联动
+document.getElementById('ficoRangeLow').addEventListener('input', function() {
+  const low = parseFloat(this.value) || 0;
+  const highInput = document.getElementById('ficoRangeHigh');
+  if (parseFloat(highInput.value) < low) {
+    highInput.value = Math.min(low + 40, 850);
+  }
+});
+</script>
+
+</body>
+</html>
