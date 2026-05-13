@@ -10,6 +10,10 @@ import numpy as np
 import pandas as pd
 import pickle
 import os
+import sklearn
+import lightgbm
+import xgboost
+import catboost
 
 # ============================================================
 # 页面配置
